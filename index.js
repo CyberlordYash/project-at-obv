@@ -1,4 +1,4 @@
-require("./tracing.js"); // Initialize OpenTelemetry tracing
+require("./tracing"); // Initialize OpenTelemetry tracing
 const express = require("express");
 const client = require("prom-client"); // Metric collection
 const { createLogger, transports } = require("winston");
@@ -135,4 +135,5 @@ app.get("/slow", async (req, res) => {
 // Start Express server
 app.listen(port, () => {
   logger.info(`Server is running on http://localhost:${port}`);
+  console.log(`Server is running on http://localhost:${port}`);
 });

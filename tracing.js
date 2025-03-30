@@ -1,38 +1,40 @@
-const { NodeSDK } = require("@opentelemetry/sdk-node");
+const opentelemetry = require("@opentelemetry/sdk-node");
+const {
+  getNodeAutoInstrumentations,
+} = require("@opentelemetry/auto-instrumentations-node");
 const {
   OTLPTraceExporter,
 } = require("@opentelemetry/exporter-trace-otlp-http");
-const {
-  ConsoleSpanExporter,
-  SimpleSpanProcessor,
-} = require("@opentelemetry/sdk-trace-base");
-const { HttpInstrumentation } = require("@opentelemetry/instrumentation-http");
-const {
-  ExpressInstrumentation,
-} = require("@opentelemetry/instrumentation-express");
-const { Resource } = require("@opentelemetry/resources"); // ✅ Correct Import
-const {
-  SemanticResourceAttributes,
-} = require("@opentelemetry/semantic-conventions"); // ✅ Needed for proper resource attributes
 
-function initializeTracing() {
-  const traceExporter = new OTLPTraceExporter({
-    url: "http://127.0.0.1:4318/v1/traces", // Tempo OTLP HTTP endpoint
-  });
+// Create a simpler SDK configuration
+const sdk = new opentelemetry.NodeSDK({
+  // Use resource attributes directly instead of Resource constructor
+  resourceAttributes: {
+    "service.name": "my-node-service",
+    "service.version": "1.0.0",
+  },
+  traceExporter: new OTLPTraceExporter({
+    url: "http://192.168.1.3:4318/v1/traces",
+  }),
+  instrumentations: [getNodeAutoInstrumentations()],
+});
 
-  const sdk = new NodeSDK({
-    traceExporter,
-    instrumentations: [new HttpInstrumentation(), new ExpressInstrumentation()],
-    resource: new Resource({
-      // ✅ Fix: Use Resource correctly
-      [SemanticResourceAttributes.SERVICE_NAME]: "express-tracing",
-    }),
-  });
-
-  sdk
-    .start()
-    .then(() => console.log("✅ OpenTelemetry tracing initialized"))
-    .catch((err) => console.error("❌ Error initializing tracing:", err));
+// Initialize the SDK
+try {
+  sdk.start();
+  console.log("✅ OpenTelemetry tracing initialized");
+} catch (error) {
+  console.error("Error initializing tracing:", error);
 }
 
-module.exports = initializeTracing;
+// Add a simple process shutdown handler
+process.on("SIGTERM", () => {
+  try {
+    sdk.shutdown();
+    console.log("SDK shut down successfully");
+  } catch (error) {
+    console.error("Error shutting down SDK:", error);
+  } finally {
+    process.exit(0);
+  }
+});
