@@ -1,0 +1,52 @@
+services:
+  prom-server:
+    image: prom/prometheus
+    ports:
+      - 9090:9090
+    volumes:
+      - ./prometheus-config.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - 4000:3000
+    depends_on:
+      - prom-server
+      - loki
+      - tempo
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+    networks:
+      - monitoring
+
+  loki:
+    image: grafana/loki
+    container_name: loki
+    ports:
+      - 3100:3100
+    networks:
+      - monitoring
+    command: -config.file=/etc/loki/local-config.yaml
+
+  tempo:
+    image: grafana/tempo
+    container_name: tempo
+    ports:
+      - 4317:4317 # OTLP gRPC
+      - 4318:4318 # OTLP HTTP
+      - 3200:3200 # Tempo Query
+    networks:
+      - monitoring
+    command: -config.file=/etc/tempo.yml
+    volumes:
+      - ./tempo-config.yml:/etc/tempo.yml
+
+networks:
+  monitoring:
+
+volumes:
+  grafana-data:
