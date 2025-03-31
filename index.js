@@ -3,6 +3,8 @@ const express = require("express");
 const client = require("prom-client"); // Metric collection
 const { createLogger, transports } = require("winston");
 const LokiTransport = require("winston-loki");
+const { context, trace } = require("@opentelemetry/api"); // Import OpenTelemetry API
+
 const options = {
   transports: [
     new LokiTransport({
@@ -44,10 +46,17 @@ const httpRequestErrors = new client.Counter({
 });
 register.registerMetric(httpRequestErrors);
 
-// Middleware to track metrics
+// Middleware to track metrics & logging with Trace ID
 app.use((req, res, next) => {
   const start = process.hrtime();
-  logger.info(`Incoming request: ${req.method} ${req.path}`);
+  const activeSpan = trace.getSpan(context.active());
+  const traceId = activeSpan ? activeSpan.spanContext().traceId : "unknown";
+
+  res.setHeader("x-trace-id", traceId); // Attach trace ID to response
+
+  logger.info(
+    `Incoming request: ${req.method} ${req.path} | Trace ID: ${traceId}`
+  );
 
   res.on("finish", () => {
     const duration = process.hrtime(start);
@@ -70,11 +79,11 @@ app.use((req, res, next) => {
         status_code: res.statusCode,
       });
       logger.error(
-        `Error response: ${req.method} ${req.path} - ${res.statusCode}`
+        `Error response: ${req.method} ${req.path} - ${res.statusCode} | Trace ID: ${traceId}`
       );
     } else {
       logger.info(
-        `Response sent: ${req.method} ${req.path} - ${res.statusCode}`
+        `Response sent: ${req.method} ${req.path} - ${res.statusCode} | Trace ID: ${traceId}`
       );
     }
   });
@@ -122,14 +131,24 @@ const asyncFunction = async () => {
   });
 };
 
-// Route that calls the asynchronous function (slow API)
+// Route that calls the asynchronous function (slow API) with tracing
 app.get("/slow", async (req, res) => {
-  try {
-    const result = await asyncFunction();
-    res.send(result);
-  } catch (error) {
-    res.status(500).send(error.message);
-  }
+  const tracer = trace.getTracer("my-node-service");
+  tracer.startActiveSpan("slow-api-span", async (span) => {
+    const traceId = span.spanContext().traceId;
+    logger.info(`Processing /slow request | Trace ID: ${traceId}`);
+    res.setHeader("x-trace-id", traceId); // Ensure trace ID is in the response
+
+    try {
+      const result = await asyncFunction();
+      res.send(result);
+    } catch (error) {
+      span.recordException(error);
+      res.status(500).send(error.message);
+    } finally {
+      span.end();
+    }
+  });
 });
 
 // Start Express server
