@@ -4,6 +4,7 @@ const client = require("prom-client"); // Metric collection
 const { createLogger, transports } = require("winston");
 const LokiTransport = require("winston-loki");
 const { context, trace } = require("@opentelemetry/api"); // Import OpenTelemetry API
+const axios = require("axios");
 
 const options = {
   transports: [
@@ -95,6 +96,26 @@ app.use((req, res, next) => {
 app.get("/metrics", async (req, res) => {
   res.setHeader("Content-Type", register.contentType);
   res.send(await register.metrics());
+});
+
+app.get("/problem", async (req, res) => {
+  console.log("Calling external service...");
+  const tracer = trace.getTracer("my-node-service");
+  const span = tracer.startSpan("problem-api-span");
+
+  try {
+    console.log("Calling external service...");
+    const response = await axios.get("http://localhost:5000/external-service");
+
+    console.log("External service responded successfully");
+    res.send(response.data);
+  } catch (error) {
+    console.error("Error calling external service:", error.message);
+    span.recordException(error);
+    res.status(500).send("External service error");
+  } finally {
+    span.end();
+  }
 });
 
 // Dummy home route

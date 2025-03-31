@@ -10,6 +10,7 @@
     "@opentelemetry/sdk-trace-base": "^2.0.0",
     "@opentelemetry/sdk-trace-node": "^2.0.0",
     "@opentelemetry/semantic-conventions": "^1.30.0",
+    "axios": "^1.8.4",
     "express": "^4.21.2",
     "nodemon": "^3.1.9",
     "prom-client": "^15.1.3",
